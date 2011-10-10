@@ -1,0 +1,5 @@
+- create git repo at github (git)
+- write script: 
+     *  convert animated gif into standalone gifs (imagemegic)
+     *  create video from standalone gifs  (mencoder)
+     *  overlay gifs' video onto input video (ffmpeg)
