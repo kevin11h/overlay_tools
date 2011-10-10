@@ -1,4 +1,4 @@
-- create git repo at github (git)
+- create git repo at github (git)                                 [OK]
 - write script: 
      *  convert animated gif into standalone gifs (imagemegic)
      *  create video from standalone gifs  (mencoder)
