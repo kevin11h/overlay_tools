@@ -51,7 +51,7 @@ def create_video(image, video, length, framerate=5, params=''):
     length_video = len(frames) / framerate
     
     # create video
-    files = ''
+    files = 'video.avi'
     for i in xrange(0, length / length_video):
         files = files + " video.avi"
 
@@ -85,7 +85,7 @@ def video_params(video):
         raise Exception("Return code is not null")
 
     duration_regexp = re.compile(".*Duration:\s(?P<hours>[0-9.]+):(?P<minutes>[0-9.]+):(?P<seconds>[0-9.]+),.*")
-    width_height_regexp = re.compile(".*Stream.*,\s(?P<width>\d+)x(?P<height>\d+),.*")
+    width_height_regexp = re.compile(".*Stream.*,\s(?P<width>\d+)x(?P<height>\d+).*")
 
     for line in stderrdata.split('\n'):
         match = duration_regexp.match(line)
@@ -137,7 +137,7 @@ def overlay_video(video, overlay, new_video, overlay_params=OVERLAY_CENTER, vide
 def main(argv):
     from optparse import OptionParser
     
-    usage = "usage: %prog [options] <input_video>"
+    usage = "usage: %prog -i IMAGE [-f FRAMERATE] [-o output_video] [--overlay-ceter | ...] <input_video>"
     parser = OptionParser(usage)
     
     parser.add_option("--overlay-center",
@@ -177,6 +177,13 @@ def main(argv):
         metavar="IMAGE",
         help="set overlay animated IMAGE")
     
+    parser.add_option("-f", "--framerate",
+        action="store",
+        type="int",
+        dest="framerate",
+        metavar="FRAMERATE",
+        help="set overlay animated FRAMERATE")
+    
     parser.add_option("-o", "--output-video",
         action="store",
         type="string",
@@ -185,7 +192,8 @@ def main(argv):
         help="set output video filename")
 
     (options, args) = parser.parse_args()
-    
+      
+    overlay_place = OVERLAY_CENTER 
     if options.overlay_center:
         overlay_place = OVERLAY_CENTER
     elif options.overlay_bottom_left:
@@ -197,16 +205,37 @@ def main(argv):
     elif options.overlay_top_left:
         overlay_place = OVERLAY_TOP_RIGHT
     
+    if not options.animated_image or not args:
+        parser.print_help()
+        sys.exit(1)
+
     animated_image = options.animated_image   
     if not os.path.isabs(animated_image):
         animated_image = os.path.abspath(animated_image)
-    
+
     video = args[0]
     if not os.path.isabs(video):
         video = os.path.abspath(video)
     
-    
-    new_video = os.path.abspath()
+    if options.output_video:           
+        new_video = options.output_video
+        if not os.path.isabs(new_video):
+            new_video = os.path.abspath(new_video)
+    else:
+        path, ext = os.path.splitext(video)
+        new_video = "%s_overlay.mp4" % (path)
+
+    image_path, image_ext = os.path.splitext(animated_image)
+    image_video = "%s.mp4" % (image_path)
+
+    length, width, height = video_params(video)
+
+    if options.framerate:
+        create_video(animated_image, image_video, length, options.framerate)
+    else:
+        create_video(animated_image, image_video, length)
+
+    overlay_video(video, image_video, new_video, overlay_place) 
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))
