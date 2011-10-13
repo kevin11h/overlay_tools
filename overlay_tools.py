@@ -7,13 +7,14 @@ import os
 FFMPEG_CMD = "/usr/bin/ffmpeg"
 FFPROBE_CMD = "/usr/bin/ffprobe"
 CONVERT_CMD = "/usr/bin/convert"
+IDENTIFY_CMD = "/usr/bin/identify"
 MENCODER_CMD = "/usr/bin/mencoder"
 
 OVERLAY_CENTER = "(W-w)/2:(H-h)/2"
 OVERLAY_BOTTOM_LEFT = "0:H-h"
-OVERLAY_BOTTOM_RIGHT = "W-h:H-h"
+OVERLAY_BOTTOM_RIGHT = "W-w:H-h"
 OVERLAY_TOP_LEFT = "0:0" 
-OVERLAY_TOP_RIGHT = "W-h:0"
+OVERLAY_TOP_RIGHT = "W-w:0"
 
 def create_video(image, video, length, framerate=5, params=''):
     "Create video from animated gif"
@@ -69,6 +70,31 @@ def create_video(image, video, length, framerate=5, params=''):
         for name in dirs:
             os.rmdir(os.path.join(root, name))
     os.rmdir(tmpdir)
+
+def image_params(image):
+    "Get image number of frames, width and height"
+    import re
+
+    num_frames = 0
+    width = 0
+    height = 0
+
+    cmd = "%s %s" % (IDENTIFY_CMD, image)
+    p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+    (stdoutdata, stderrdata) = p.communicate()
+    if p.returncode:
+        raise Exception("Return code is not null")
+   
+    lines = stdoutdata.splitlines()
+    if lines:
+        num_frames = len(lines)
+        width_height_regexp = re.compile(".*\s(?P<width>\d+)x(?P<height>\d+)\s.*")
+        match = width_height_regexp.match(lines[0])
+        if match:
+            width = int(match.groupdict()["width"])
+            height = int(match.groupdict()["height"])
+
+    return (num_frames, width, height)
      
 def video_params(video):
     "Get video length, width and height"
@@ -87,7 +113,7 @@ def video_params(video):
     duration_regexp = re.compile(".*Duration:\s(?P<hours>[0-9.]+):(?P<minutes>[0-9.]+):(?P<seconds>[0-9.]+),.*")
     width_height_regexp = re.compile(".*Stream.*,\s(?P<width>\d+)x(?P<height>\d+).*")
 
-    for line in stderrdata.split('\n'):
+    for line in stderrdata.splitlines():
         match = duration_regexp.match(line)
         if not length and match:
             seconds = int(round(float(match.groupdict()["seconds"]))) 
@@ -97,8 +123,8 @@ def video_params(video):
             
         match = width_height_regexp.match(line)
         if not height and not width and match:    
-            width = match.groupdict()["width"]
-            height = match.groupdict()["height"]
+            width = int(match.groupdict()["width"])
+            height = int(match.groupdict()["height"])
 
     return (length, width, height)
 
@@ -131,8 +157,13 @@ def overlay_video(video, overlay, new_video, overlay_params=OVERLAY_CENTER, vide
     
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
+
     if p.returncode:
         raise Exception("Return code is not null")
+
+def overlay_video_worker(video, overlays, new_video, overlay_params=OVERLAY_CENTER, video_params=''):
+    "Complex overlay video"
+    pass
 
 def main(argv):
     from optparse import OptionParser
@@ -170,12 +201,12 @@ def main(argv):
         default=False,
         help="overlay at top right of input video") 
 
-    parser.add_option("-i", "--animated-image",
+    parser.add_option("-i", "--image",
         action="store",
         type="string",
-        dest="animated_image",
+        dest="image",
         metavar="IMAGE",
-        help="set overlay animated IMAGE")
+        help="set overlay IMAGE")
     
     parser.add_option("-f", "--framerate",
         action="store",
@@ -202,16 +233,16 @@ def main(argv):
         overlay_place = OVERLAY_BOTTOM_RIGHT
     elif options.overlay_top_left:
         overlay_place = OVERLAY_TOP_LEFT
-    elif options.overlay_top_left:
+    elif options.overlay_top_right:
         overlay_place = OVERLAY_TOP_RIGHT
     
-    if not options.animated_image or not args:
+    if not options.image or not args:
         parser.print_help()
         sys.exit(1)
 
-    animated_image = options.animated_image   
-    if not os.path.isabs(animated_image):
-        animated_image = os.path.abspath(animated_image)
+    image = options.image   
+    if not os.path.isabs(image):
+        image = os.path.abspath(image)
 
     video = args[0]
     if not os.path.isabs(video):
@@ -225,15 +256,23 @@ def main(argv):
         path, ext = os.path.splitext(video)
         new_video = "%s_overlay.mp4" % (path)
 
-    image_path, image_ext = os.path.splitext(animated_image)
-    image_video = "%s.mp4" % (image_path)
+    video_length, video_width, video_height = video_params(video)
+    image_num_frames, image_width, image_height = image_params(image)
 
-    length, width, height = video_params(video)
+    if not image_num_frames:
+        print >> sys.stderr, "Image is broken!"
+        sys.exit(1)
 
-    if options.framerate:
-        create_video(animated_image, image_video, length, options.framerate)
+    if image_num_frames == 1:
+        image_video = image
     else:
-        create_video(animated_image, image_video, length)
+        image_path, image_ext = os.path.splitext(image)
+        image_video = "%s.mp4" % (image_path)
+
+        if options.framerate:
+            create_video(image, image_video, video_length, options.framerate)
+        else:
+            create_video(image, image_video, video_length)
 
     overlay_video(video, image_video, new_video, overlay_place) 
 
