@@ -144,7 +144,7 @@ def convert_video(video, extension="mp4", params=''):
 
     return path
 
-def overlay_video(video, overlay, new_video, overlay_params=OVERLAY_CENTER, video_params=''):
+def overlay_video(video, overlay, new_video, overlay_params=OVERLAY_CENTER, video_params="-strict experimental"):
     "Overlay video or image"
 
     if not os.path.exists(video):
@@ -158,6 +158,28 @@ def overlay_video(video, overlay, new_video, overlay_params=OVERLAY_CENTER, vide
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
 
+    if p.returncode:
+        raise Exception("Return code is not null")
+
+def set_video_hue_and_saturation(video, new_video, hue=0, saturation=1, video_params="-strict experimental"):
+    "Set vedeo hue and saturation"
+
+    cmd = "%s -y -i %s -vf 'mp=hue=%d:%d' %s %s" % (FFMPEG_CMD, video, hue, saturation, video_params, new_video)
+    p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+    (stdoutdata, stderrdata) = p.communicate()
+    print cmd
+    print stderrdata
+    if p.returncode:
+        raise Exception("Return code is not null")
+
+def set_video_brightness_and_contrast(video, new_video, brightness=0, contrast=0, video_params="-strict experimental"):
+    "Set vedeo brightness and contrast"
+
+    cmd = "%s -y -i %s -vf 'mp=eq=%d:%d' %s %s" % (FFMPEG_CMD, video, brightness, contrast, video_params, new_video)
+    p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+    (stdoutdata, stderrdata) = p.communicate()
+    print cmd
+    print stderrdata
     if p.returncode:
         raise Exception("Return code is not null")
 
@@ -277,4 +299,5 @@ def main(argv):
     overlay_video(video, image_video, new_video, overlay_place)
 
 if __name__ == "__main__":
+    #adjust_video(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6]))
     sys.exit(main(sys.argv))
