@@ -4,7 +4,7 @@ To read help type:
 
 $ overlay_tools.py --help
 
-Example of usage:
+Examples of usage:
 
 $ cd examples
 $ ../overlay_tools.py -i color__1318102333_flourides_1318104950_pepper.gif -f 9 --overlay-bottom-left 20051210-w50s.flv
@@ -13,3 +13,8 @@ then you will find two new files:
 
 color__1318102333_flourides_1318104950_pepper.mp4 - is video was created from inimated image with properly lenght
 20051210-w50s_overlay.mp4 - ouput video with overlay
+
+Changing soundtrack:
+
+$ cd example
+$ ../overlay_tools.py -i color__1318102333_flourides_1318104950_pepper.gif -f 9 -a blind_willie.mp3 --overlay-bottom-left 20051210-w50s.flv

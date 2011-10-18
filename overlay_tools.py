@@ -71,7 +71,7 @@ def create_video(image, video, length, framerate=5, params=''):
             os.rmdir(os.path.join(root, name))
     os.rmdir(tmpdir)
 
-def image_params(image):
+def get_image_params(image):
     "Get image number of frames, width and height"
     import re
 
@@ -96,7 +96,7 @@ def image_params(image):
 
     return (num_frames, width, height)
 
-def video_params(video):
+def get_video_params(video):
     "Get video length, width and height"
     import re
 
@@ -144,16 +144,25 @@ def convert_video(video, extension="mp4", params=''):
 
     return path
 
-def overlay_video(video, overlay, new_video, overlay_params=OVERLAY_CENTER, video_params="-strict experimental"):
+def overlay_video(video, overlay, new_video, audio=None, overlay_params=OVERLAY_CENTER,
+    video_params="-strict experimental"):
     "Overlay video or image"
 
     if not os.path.exists(video):
         raise Exception("No such file %s" % video)
     if not os.path.exists(overlay):
         raise Exception("No such file %s" % overlay)
+    if not os.path.exists(audio):
+        raise Exception("No such file %s" % audio)
 
-    cmd_fmt = "%s -y -i %s -vf \"movie=%s [logo]; [in][logo] overlay=%s [out]\" %s %s"
-    cmd = cmd_fmt % (FFMPEG_CMD, video, overlay, overlay_params, video_params, new_video)
+    if audio:
+        video_length, video_width, video_height = get_video_params(video)
+        cmd_fmt = "%s -y -i %s -t %d -i %s -vf \"movie=%s [logo]; [in][logo] overlay=%s [out]\" %s %s"
+        cmd = cmd_fmt % (FFMPEG_CMD, audio, video_length, video, overlay,
+            overlay_params, video_params, new_video)
+    else:
+        cmd_fmt = "%s -y -i %s -vf \"movie=%s [logo]; [in][logo] overlay=%s [out]\" %s %s"
+        cmd = cmd_fmt % (FFMPEG_CMD, video, overlay, overlay_params, video_params, new_video)
 
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
@@ -190,7 +199,7 @@ def overlay_video_worker(video, overlays, new_video, overlay_params=OVERLAY_CENT
 def main(argv):
     from optparse import OptionParser
 
-    usage = "usage: %prog -i IMAGE [-f FRAMERATE] [-o output_video] [--overlay-ceter | ...] <input_video>"
+    usage = "usage: %prog -i IMAGE [-f FRAMERATE] [-a AUDIO] [-o output_video] [--overlay-ceter | ...] <input_video>"
     parser = OptionParser(usage)
 
     parser.add_option("--overlay-center",
@@ -244,6 +253,13 @@ def main(argv):
         metavar="FILE",
         help="set output video filename")
 
+    parser.add_option("-a", "--audio",
+        action="store",
+        type="string",
+        dest="audio",
+        metavar="FILE",
+        help="set audio file as soundtrack")
+
     (options, args) = parser.parse_args()
 
     overlay_place = OVERLAY_CENTER
@@ -278,8 +294,8 @@ def main(argv):
         path, ext = os.path.splitext(video)
         new_video = "%s_overlay.mp4" % (path)
 
-    video_length, video_width, video_height = video_params(video)
-    image_num_frames, image_width, image_height = image_params(image)
+    video_length, video_width, video_height = get_video_params(video)
+    image_num_frames, image_width, image_height = get_image_params(image)
 
     if not image_num_frames:
         print >> sys.stderr, "Image is broken!"
@@ -296,8 +312,13 @@ def main(argv):
         else:
             create_video(image, image_video, video_length)
 
-    overlay_video(video, image_video, new_video, overlay_place)
+    if options.audio:
+        audio = options.audio
+        if not os.path.isabs(audio):
+            audio = os.path.abspath(audio)
+        overlay_video(video, image_video, new_video, audio, overlay_place)
+    else:
+        overlay_video(video, image_video, new_video, overlay_params=overlay_place)
 
 if __name__ == "__main__":
-    #adjust_video(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6]))
     sys.exit(main(sys.argv))
