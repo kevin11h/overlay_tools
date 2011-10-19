@@ -17,7 +17,22 @@ OVERLAY_TOP_LEFT = "0:0"
 OVERLAY_TOP_RIGHT = "W-w:0"
 
 def create_video(image, video, length, framerate=5, params=''):
-    "Create video from animated gif"
+    '''Create video from animated gif.
+
+    Arguments:
+    image -- The input image file.
+    video -- The output video file.
+    length -- The length of video in seconds.
+    framerate -- The framerate of the video (default is 5).
+    params -- Additional ffmpeg video parameters.
+
+    Returns:
+    None.
+
+    Create video file from animated image with the framerate.
+
+    '''
+
     import glob
     import tempfile
 
@@ -37,6 +52,7 @@ def create_video(image, video, length, framerate=5, params=''):
 
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
+
     if p.returncode:
         raise Exception("Return code is not null")
 
@@ -44,8 +60,10 @@ def create_video(image, video, length, framerate=5, params=''):
 
     # create video from image
     cmd = "%s -y -r %d -f image2 -i '%%03d%s' %s video.avi" % (FFMPEG_CMD, framerate, ext, params)
+
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
+
     if p.returncode:
         raise Exception("Return code is not null")
 
@@ -57,12 +75,14 @@ def create_video(image, video, length, framerate=5, params=''):
         files = files + " video.avi"
 
     cmd = "%s -forceidx -oac copy -ovc copy -o %s %s" % (MENCODER_CMD, video, files)
+
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
+
     if p.returncode:
         raise Exception("Return code is not null")
 
-    # delete temprorary data    
+    # delete temprorary data
     os.chdir(cwd)
     for root, dirs, files in os.walk(tmpdir, topdown=False):
         for name in files:
@@ -72,7 +92,15 @@ def create_video(image, video, length, framerate=5, params=''):
     os.rmdir(tmpdir)
 
 def get_image_params(image):
-    "Get image number of frames, width and height"
+    '''Get image number of frames, width and height.
+
+    Arguments:
+    image -- The input image file.
+
+    Returns:
+    Tuaple (number of frames, width, height)
+
+    '''
     import re
 
     num_frames = 0
@@ -80,16 +108,20 @@ def get_image_params(image):
     height = 0
 
     cmd = "%s %s" % (IDENTIFY_CMD, image)
+
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
+
     if p.returncode:
         raise Exception("Return code is not null")
 
     lines = stdoutdata.splitlines()
     if lines:
+
         num_frames = len(lines)
         width_height_regexp = re.compile(".*\s(?P<width>\d+)x(?P<height>\d+)\s.*")
         match = width_height_regexp.match(lines[0])
+
         if match:
             width = int(match.groupdict()["width"])
             height = int(match.groupdict()["height"])
@@ -97,7 +129,16 @@ def get_image_params(image):
     return (num_frames, width, height)
 
 def get_video_params(video):
-    "Get video length, width and height"
+    '''Get video length, width and height.
+
+    Arguments:
+    video -- The input video file.
+
+    Returns:
+    Tuaple (length, width, height)
+
+    '''
+
     import re
 
     length = 0
@@ -105,8 +146,10 @@ def get_video_params(video):
     width = 0
 
     cmd = "%s %s" % (FFPROBE_CMD, video)
+
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
+
     if p.returncode:
         raise Exception("Return code is not null")
 
@@ -114,6 +157,7 @@ def get_video_params(video):
     width_height_regexp = re.compile(".*Stream.*,\s(?P<width>\d+)x(?P<height>\d+).*")
 
     for line in stderrdata.splitlines():
+
         match = duration_regexp.match(line)
         if not length and match:
             seconds = int(round(float(match.groupdict()["seconds"])))
@@ -129,7 +173,19 @@ def get_video_params(video):
     return (length, width, height)
 
 def convert_video(video, extension="mp4", params=''):
-    "Convert video"
+    '''Convert video.
+
+    Arguments:
+    video -- The input video file.
+    extension -- The output video extension.
+    video_params -- Additional ffmpeg video parameters.
+
+    Returns:
+    None.
+
+    Convert input video file into video file with the new extension.
+
+    '''
 
     if not os.path.exists(video):
         raise Exception("No such file %s" % video)
@@ -139,21 +195,41 @@ def convert_video(video, extension="mp4", params=''):
 
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
+
     if p.returncode:
         raise Exception("Return code is not null")
 
     return path
 
-def overlay_video(video, overlay, new_video, audio=None, overlay_params=OVERLAY_CENTER,
+def create_overlay_video(video, overlay, new_video, audio=None, overlay_params=OVERLAY_CENTER,
     video_params="-strict experimental"):
-    "Overlay video or image"
+    '''Create video overlay.
+    
+    Arguments:
+    video -- The input video file.
+    overlay -- The input video file for overlay. 
+    new_video -- The new video file name.
+    audio -- The soundtrack audio file.
+    overlay_params -- Overlay position parameter. Possible values are OVERLAY_CENTER, 
+                      OVERLAY_BOTTOM_LEFT, OVERLAY_BOTTOM_RIGHT, OVERLAY_TOP_LEFT and
+                      OVERLAY_TOP_RIGHT.
+    video_params -- Additional ffmpeg video parameters.
+
+    Returns:
+    None.
+
+    Create overlay of video and store it into new video file. One may change a default soundtrack
+    of input video with help new audio soundtrack file. Soundtrack file may be any of supported by 
+    ffmpeg audio file, for example, a mp3 file.
+  
+    '''
 
     if not os.path.exists(video):
-        raise Exception("No such file %s" % video)
+        raise IOError("No such file %s" % video)
     if not os.path.exists(overlay):
-        raise Exception("No such file %s" % overlay)
+        raise IOError("No such file %s" % overlay)
     if not os.path.exists(audio):
-        raise Exception("No such file %s" % audio)
+        raise IOError("No such file %s" % audio)
 
     if audio:
         video_length, video_width, video_height = get_video_params(video)
@@ -171,32 +247,104 @@ def overlay_video(video, overlay, new_video, audio=None, overlay_params=OVERLAY_
         raise Exception("Return code is not null")
 
 def set_video_hue_and_saturation(video, new_video, hue=0, saturation=1, video_params="-strict experimental"):
-    "Set vedeo hue and saturation"
+    '''Set video hue and saturation.
+
+    Arguments:
+    video -- The input video file.
+    new_video -- The new video file name.
+    hue -- The hue of video (default is 0).
+    saturation -- The saturation of video (default is 0).
+    video_params -- Additional ffmpeg video parameters.
+
+    Returns:
+    None.
+
+    Set hue and saturation for video and store it into new video file.
+
+    '''
 
     cmd = "%s -y -i %s -vf 'mp=hue=%d:%d' %s %s" % (FFMPEG_CMD, video, hue, saturation, video_params, new_video)
+
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
-    print cmd
-    print stderrdata
+
     if p.returncode:
         raise Exception("Return code is not null")
 
 def set_video_brightness_and_contrast(video, new_video, brightness=0, contrast=0, video_params="-strict experimental"):
-    "Set vedeo brightness and contrast"
+    '''Set video brightness and contrast.
+
+    Arguments:
+    video -- The input video file.
+    new_video -- The new video file name.
+    brightness -- The brightness of video (default is 0).
+    contrast -- The contrast of video (default is 0).
+    video_params -- Additional ffmpeg video parameters.
+
+    Returns:
+    None.
+
+    Set brightness and contrast for video and store it into new video file.
+
+    '''
 
     cmd = "%s -y -i %s -vf 'mp=eq=%d:%d' %s %s" % (FFMPEG_CMD, video, brightness, contrast, video_params, new_video)
+
     p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     (stdoutdata, stderrdata) = p.communicate()
-    print cmd
-    print stderrdata
+
     if p.returncode:
         raise Exception("Return code is not null")
 
 def overlay_video_worker(video, overlays, new_video, overlay_params=OVERLAY_CENTER, video_params=''):
-    "Complex overlay video"
+    '''Complex overlay video.
+    
+    Arguments:
+
+    Returns:
+
+    '''
     pass
 
+def regular_http_download(url, filename, size_constraint=0):
+    '''Download file from url.
+
+    Arguments:
+    url -- The uniform resource locator.
+    filename -- The name of file to store url content.
+    size_constraint -- The size of url content constraint. 0 means no constraint.
+
+    Returns:
+    None.
+
+    Download the url content and store it into file. If content size is greater then 
+    size of content constraint the function raises exception.
+
+    '''
+    import urllib
+
+    u = urllib.urlopen(url)
+    content_length = u.info()['Content-Length']
+
+    if not size_constraint or size_constraint > content_length:
+        f = open(filename, 'wb') 
+        f.write(u.read())
+        f.close()
+    else:
+        raise Exception('File is too big for downloading due to size constraint!')
+
 def main(argv):
+    '''Main function.
+
+    Arguments:
+    argv -- The command line arguments.
+
+    Returns:
+    Return code.
+ 
+    Do main work to parse command line arguments and to applay overlay.
+
+    '''
     from optparse import OptionParser
 
     usage = "usage: %prog -i IMAGE [-f FRAMERATE] [-a AUDIO] [-o output_video] [--overlay-ceter | ...] <input_video>"
@@ -276,7 +424,7 @@ def main(argv):
 
     if not options.image or not args:
         parser.print_help()
-        sys.exit(1)
+        return 1
 
     image = options.image
     if not os.path.isabs(image):
@@ -299,7 +447,7 @@ def main(argv):
 
     if not image_num_frames:
         print >> sys.stderr, "Image is broken!"
-        sys.exit(1)
+        return 1
 
     if image_num_frames == 1:
         image_video = image
@@ -316,9 +464,11 @@ def main(argv):
         audio = options.audio
         if not os.path.isabs(audio):
             audio = os.path.abspath(audio)
-        overlay_video(video, image_video, new_video, audio, overlay_place)
+        create_overlay_video(video, image_video, new_video, audio, overlay_place)
     else:
-        overlay_video(video, image_video, new_video, overlay_params=overlay_place)
+        create_overlay_video(video, image_video, new_video, overlay_params=overlay_place)
+
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))
