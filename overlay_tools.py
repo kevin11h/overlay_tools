@@ -288,7 +288,21 @@ def set_video_brightness_and_contrast(video, new_video, brightness=0, contrast=0
         raise Exception('Return code is not null')
 
 def split_video(video, parts, template='_part', video_params=''):
-    '''Split video on parts '''
+    '''Split video onto parts.
+
+    Arguments:
+    video -- The input video file.
+    parts -- The list of Tuples (start position, stop position).
+    template -- The temaplte to create file name for video part (default is '_part')
+    video_params -- Additional ffmpeg video parameters.
+
+    Returns:
+    List of parts' file names.
+
+    Split the input video onto parts.
+
+    '''
+
     video_parts = []
     video_length, video_width, video_height = get_video_params(video)
     root, ext = os.path.splitext(video)
@@ -315,7 +329,18 @@ def split_video(video, parts, template='_part', video_params=''):
     return video_parts
 
 def merge_video(videos, new_video):
-    '''Merge videos into new video '''
+    '''Merge videos into new video.
+
+    Arguments:
+    videos -- The list of video files to merge.
+    new_video -- The new video file name.
+
+    Returns:
+    None
+
+    Merge video files into new video.
+
+    '''
 
     if videos:
 
