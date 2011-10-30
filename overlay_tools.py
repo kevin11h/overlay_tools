@@ -16,7 +16,11 @@ OVERLAY_BOTTOM_RIGHT = 'W-w:H-h'
 OVERLAY_TOP_LEFT = '0:0'
 OVERLAY_TOP_RIGHT = 'W-w:0'
 
-def create_video(image, video, length, framerate=5, params=''):
+DEFAULT_FFMPEG_PARAMS = '-strict experimental'
+DEFAULT_FRAMERATE = 5
+DEFAULT_DOWNLOAD_SIZE_CONSTRAINT = 0 # in bytes, 0 is no constraint
+
+def create_video(image, video, length, framerate=DEFAULT_FRAMERATE, params=''):
     '''Create video from animated gif.
 
     Arguments:
@@ -141,10 +145,10 @@ def get_image_type(image):
 
     if p.returncode:
         raise Exception('Return code is not null')
-    
+
     lines = stdoutdata.splitlines()
     ext = lines[0].split()[1]
-    
+
     return ext
 
 def get_video_params(video):
@@ -221,12 +225,12 @@ def convert_video(video, extension='mp4', params=''):
     return path
 
 def create_overlay_video(video, overlay, new_video, audio=None, overlay_params=OVERLAY_CENTER,
-    video_params='-strict experimental'):
+    video_params=DEFAULT_FFMPEG_PARAMS):
     '''Create video overlay.
-    
+
     Arguments:
     video -- The input video file.
-    overlay -- The input video file for overlay. 
+    overlay -- The input video file for overlay.
     new_video -- The new video file name.
     audio -- The soundtrack audio file.
     overlay_params -- Overlay position parameter. Possible values are OVERLAY_CENTER, 
@@ -238,9 +242,9 @@ def create_overlay_video(video, overlay, new_video, audio=None, overlay_params=O
     None.
 
     Create overlay of video and store it into new video file. One may change a default soundtrack
-    of input video with help new audio soundtrack file. Soundtrack file may be any of supported by 
+    of input video with help new audio soundtrack file. Soundtrack file may be any of supported by
     ffmpeg audio file, for example, a mp3 file.
-  
+
     '''
 
     if not os.path.exists(video):
@@ -265,7 +269,7 @@ def create_overlay_video(video, overlay, new_video, audio=None, overlay_params=O
     if p.returncode:
         raise Exception('Return code is not null')
 
-def set_video_hue_and_saturation(video, new_video, hue=0, saturation=1, video_params='-strict experimental'):
+def set_video_hue_and_saturation(video, new_video, hue=0, saturation=1, video_params=DEFAULT_FFMPEG_PARAMS):
     '''Set video hue and saturation.
 
     Arguments:
@@ -290,7 +294,7 @@ def set_video_hue_and_saturation(video, new_video, hue=0, saturation=1, video_pa
     if p.returncode:
         raise Exception('Return code is not null')
 
-def set_video_brightness_and_contrast(video, new_video, brightness=0, contrast=0, video_params='-strict experimental'):
+def set_video_brightness_and_contrast(video, new_video, brightness=0, contrast=0, video_params=DEFAULT_FFMPEG_PARAMS):
     '''Set video brightness and contrast.
 
     Arguments:
@@ -381,16 +385,17 @@ def merge_video(videos, new_video):
         if p.returncode:
             raise Exception('Return code is not null')
 
-def overlay_video_worker(video, overlays, new_video, video_params='-strict experimental'):
+def overlay_video_worker(video, overlays, new_video, video_params=DEFAULT_FFMPEG_PARAMS):
     '''Complex overlay video.
 
     Arguments:
     video -- The input video file.
     overlays -- The List of Tuples (start time in seconds,
                                     stop time in seconds, 
-                                    URL to image or video,
-                                    overlay position).                 
-                Possible values for overlay position parameter are OVERLAY_CENTER, 
+                                    URL for image or video,
+                                    overlay position,
+                                    soundtrack).
+                Possible values for overlay position parameter are OVERLAY_CENTER,
                 OVERLAY_BOTTOM_LEFT, OVERLAY_BOTTOM_RIGHT, OVERLAY_TOP_LEFT and OVERLAY_TOP_RIGHT.
     new_video -- The new video file name.
     video_params -- Additional ffmpeg video parameters.
@@ -401,17 +406,18 @@ def overlay_video_worker(video, overlays, new_video, video_params='-strict exper
     Create complex overlay for video file and store result into new video file.
 
     '''
-    
+
     if overlays:
- 
+
         video_length, video_width, video_height = get_video_params(video)
         points = []
 
-        for start, stop, url, pos in overlays:
+        for start, stop, url, pos, track in overlays:
             if not start in points:
                 points.append(start)
             if not stop in points:
                 points.append(stop)
+
         if not 0 in points:
             points.append(0)
         if not video_length in points:
@@ -433,19 +439,22 @@ def overlay_video_worker(video, overlays, new_video, video_params='-strict exper
 
             part_url = None
             part_pos = OVERLAY_CENTER
-            for start, stop, url, pos in overlays:                
+            part_track = None
+            for start, stop, url, pos, track in overlays:
                 if part_start == start and part_stop == stop:
                     part_url = url
                     if pos:
                         part_pos = pos
+                    if track:
+                        part_track = track
                     break
-        
+
             if part_url:
 
                 if os.path.exists(part_url):
                     overlay_file = part_url
                 else:
-                    overlay_file = 'tmpfile'
+                    overlay_file = 'image_tmpfile'
                     regular_http_download(part_url, overlay_file)
                     if os.path.exists(overlay_file):
                         ext = get_image_type(overlay_file)
@@ -455,13 +464,19 @@ def overlay_video_worker(video, overlays, new_video, video_params='-strict exper
                         overlay_file = new_overlay_file
                         cache_files.append(overlay_file)
 
+                if part_track and not os.path.exists(part_track):
+                    overlay_track = 'soundtack_tmpfile'
+                    regular_http_download(part_track, overlay_track)
+                    part_track = overlay_track
+                    cache_files.append(overlay_track)
+
                 part_length, part_width, part_height = get_video_params(part_files[i])
                 image_num_frames, image_width, image_height = get_image_params(overlay_file)
 
                 if not image_num_frames:
                     print >> sys.stderr, 'Image is broken!'
                     return 1
-                
+
                 image_video = ''
                 if image_num_frames == 1:
                     image_video = overlay_file
@@ -472,27 +487,27 @@ def overlay_video_worker(video, overlays, new_video, video_params='-strict exper
                     cache_files.append(image_video)
 
                 root, ext = os.path.splitext(part_files[i])
-                overlay_part = "%s_overlay%s" % (root, ext)                
+                overlay_part = "%s_overlay%s" % (root, ext)
 
-                create_overlay_video(part_files[i], 
+                create_overlay_video(part_files[i],
                                      image_video, 
                                      overlay_part, 
-                                     audio=None, 
+                                     audio=part_track,
                                      overlay_params=part_pos,
-                                     video_params='-strict experimental')
+                                     video_params=video_params)
 
                 cache_files.append(part_files[i])
-                merge_files.append(overlay_part)                 
+                merge_files.append(overlay_part)
 
             else:
                 merge_files.append(part_files[i])
-         
+
         merge_video(merge_files, new_video)
 
         for f in cache_files + merge_files:
             os.remove(f)
 
-def regular_http_download(url, filename, size_constraint=0):
+def regular_http_download(url, filename, size_constraint=DEFAULT_DOWNLOAD_SIZE_CONSTRAINT):
     '''Download file from url.
 
     Arguments:
@@ -527,7 +542,7 @@ def main(argv):
 
     Returns:
     Return code.
- 
+
     Do main work to parse command line arguments and to applay overlay.
 
     '''
@@ -658,9 +673,8 @@ def main(argv):
 
 if __name__ == '__main__':
     #overlay_video_worker('20051210-w50s.flv', 
-    #                     [(5, 10, 'http://img.lenta.ru/articles/2011/10/28/zdrav/picture.jpg', OVERLAY_TOP_RIGHT), 
-    #                     (13, 17, 'color__1318102333_flourides_1318104950_pepper.gif', OVERLAY_BOTTOM_LEFT)],
+    #                     [(5, 10, 'http://img.lenta.ru/articles/2011/10/28/zdrav/picture.jpg', OVERLAY_TOP_RIGHT, None),
+    #                     (13, 17, 'color__1318102333_flourides_1318104950_pepper.gif', OVERLAY_BOTTOM_LEFT, None)],
     #                     'worker_overlay_20051210-w50s.flv')
-
     sys.exit(main(sys.argv))
 

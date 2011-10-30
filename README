@@ -18,3 +18,11 @@ Changing soundtrack:
 
 $ cd example
 $ ../overlay_tools.py -i color__1318102333_flourides_1318104950_pepper.gif -f 9 -a blind_willie.mp3 --overlay-bottom-left 20051210-w50s.flv
+
+
+WARNING:
+
+To use overlay_video_worker function with mp3 soundtracks one need to compile mencoder with support mpg123 audio
+codec family (afm=mpg123).
+
+To applay soundtrack to a whole video file one don't need support mpg123 in mencoder!
