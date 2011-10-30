@@ -70,7 +70,11 @@ def create_video(image, video, length, framerate=5, params=''):
     length_video = len(frames) / framerate
 
     # create video
-    files = ['video.avi'] * (length / length_video)
+    n = length / length_video
+    files = ['video.avi']
+    if n > 1:
+        files = files * (n - 1)
+
     merge_video(files, video)
 
     # delete temprorary data
@@ -118,6 +122,30 @@ def get_image_params(image):
             height = int(match.groupdict()['height'])
 
     return (num_frames, width, height)
+
+def get_image_type(image):
+    '''Get image type.
+
+    Arguments:
+    image -- The input image file.
+
+    Returns:
+    Image type.
+
+    '''
+
+    cmd = '%s %s' % (IDENTIFY_CMD, image)
+
+    p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+    (stdoutdata, stderrdata) = p.communicate()
+
+    if p.returncode:
+        raise Exception('Return code is not null')
+    
+    lines = stdoutdata.splitlines()
+    ext = lines[0].split()[1]
+    
+    return ext
 
 def get_video_params(video):
     '''Get video length, width and height.
@@ -224,7 +252,7 @@ def create_overlay_video(video, overlay, new_video, audio=None, overlay_params=O
 
     if audio:
         video_length, video_width, video_height = get_video_params(video)
-        cmd_fmt = '%s -y -i %s -t %d -i %s -vf \'movie=%s [logo]; [in][logo] overlay=%s [out]\' %s %s'
+        cmd_fmt = '%s -y -sameq -i %s -t %d -i %s -vf \'movie=%s [logo]; [in][logo] overlay=%s [out]\' %s %s'
         cmd = cmd_fmt % (FFMPEG_CMD, audio, video_length, video, overlay,
             overlay_params, video_params, new_video)
     else:
@@ -306,6 +334,7 @@ def split_video(video, parts, template='_part', video_params=''):
     video_parts = []
     video_length, video_width, video_height = get_video_params(video)
     root, ext = os.path.splitext(video)
+    ext = '.mpeg'
     cmd_tmpl = '%s -y -sameq -ss %d -t %d -i %s %s %s'
     i = 0
 
@@ -318,7 +347,7 @@ def split_video(video, parts, template='_part', video_params=''):
         video_part = '%s%s%d%s' % (root, template, i, ext)
         video_parts.append(video_part)
 
-        cmd = cmd_tmpl % (FFMPEG_CMD, start_pos, stop_pos, video, video_params, video_part)
+        cmd = cmd_tmpl % (FFMPEG_CMD, start_pos, stop_pos - start_pos, video, video_params, video_part)
 
         p = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
         (stdoutdata, stderrdata) = p.communicate()
@@ -338,7 +367,7 @@ def merge_video(videos, new_video):
     Returns:
     None
 
-    Merge video files into new video.
+    Merge video files into new video file.
 
     '''
 
@@ -352,15 +381,116 @@ def merge_video(videos, new_video):
         if p.returncode:
             raise Exception('Return code is not null')
 
-def overlay_video_worker(video, overlays, new_video, overlay_params=OVERLAY_CENTER, video_params=''):
+def overlay_video_worker(video, overlays, new_video, video_params='-strict experimental'):
     '''Complex overlay video.
 
     Arguments:
+    video -- The input video file.
+    overlays -- The List of Tuples (start time in seconds,
+                                    stop time in seconds, 
+                                    URL to image or video,
+                                    overlay position).                 
+                Possible values for overlay position parameter are OVERLAY_CENTER, 
+                OVERLAY_BOTTOM_LEFT, OVERLAY_BOTTOM_RIGHT, OVERLAY_TOP_LEFT and OVERLAY_TOP_RIGHT.
+    new_video -- The new video file name.
+    video_params -- Additional ffmpeg video parameters.
 
     Returns:
+    None.
+
+    Create complex overlay for video file and store result into new video file.
 
     '''
-    pass
+    
+    if overlays:
+ 
+        video_length, video_width, video_height = get_video_params(video)
+        points = []
+
+        for start, stop, url, pos in overlays:
+            if not start in points:
+                points.append(start)
+            if not stop in points:
+                points.append(stop)
+        if not 0 in points:
+            points.append(0)
+        if not video_length in points:
+            points.append(video_length)
+
+        points.sort()
+
+        parts = []
+        for i in xrange(0, len(points) - 1):
+            parts.append((points[i], points[i + 1]))
+         
+        part_files = split_video(video, parts)
+
+        cache_files = []
+        merge_files = []
+
+        for i in xrange(0, len(parts)):
+            part_start, part_stop = parts[i]
+
+            part_url = None
+            part_pos = OVERLAY_CENTER
+            for start, stop, url, pos in overlays:                
+                if part_start == start and part_stop == stop:
+                    part_url = url
+                    if pos:
+                        part_pos = pos
+                    break
+        
+            if part_url:
+
+                if os.path.exists(part_url):
+                    overlay_file = part_url
+                else:
+                    overlay_file = 'tmpfile'
+                    regular_http_download(part_url, overlay_file)
+                    if os.path.exists(overlay_file):
+                        ext = get_image_type(overlay_file)
+                        new_overlay_file = "%s.%s" % (overlay_file, ext)
+                        os.rename(overlay_file, new_overlay_file)
+
+                        overlay_file = new_overlay_file
+                        cache_files.append(overlay_file)
+
+                part_length, part_width, part_height = get_video_params(part_files[i])
+                image_num_frames, image_width, image_height = get_image_params(overlay_file)
+
+                if not image_num_frames:
+                    print >> sys.stderr, 'Image is broken!'
+                    return 1
+                
+                image_video = ''
+                if image_num_frames == 1:
+                    image_video = overlay_file
+                else:
+                    image_path, image_ext = os.path.splitext(overlay_file)
+                    image_video = '%s.mp4' % (image_path)
+                    create_video(overlay_file, image_video, part_length)
+                    cache_files.append(image_video)
+
+                root, ext = os.path.splitext(part_files[i])
+                overlay_part = "%s_overlay%s" % (root, ext)                
+
+                create_overlay_video(part_files[i], 
+                                     image_video, 
+                                     overlay_part, 
+                                     audio=None, 
+                                     overlay_params=part_pos,
+                                     video_params='-strict experimental')
+
+                cache_files.append(part_files[i])
+                merge_files.append(overlay_part)                 
+
+            else:
+                merge_files.append(part_files[i])
+         
+        merge_video(merge_files, new_video)
+
+        for f in cache_files + merge_files:
+            os.remove(f)
 
 def regular_http_download(url, filename, size_constraint=0):
     '''Download file from url.
@@ -527,4 +657,10 @@ def main(argv):
     return 0
 
 if __name__ == '__main__':
+    #overlay_video_worker('20051210-w50s.flv', 
+    #                     [(5, 10, 'http://img.lenta.ru/articles/2011/10/28/zdrav/picture.jpg', OVERLAY_TOP_RIGHT), 
+    #                     (13, 17, 'color__1318102333_flourides_1318104950_pepper.gif', OVERLAY_BOTTOM_LEFT)],
+    #                     'worker_overlay_20051210-w50s.flv')
+
     sys.exit(main(sys.argv))
+
