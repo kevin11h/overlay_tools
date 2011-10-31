@@ -16,7 +16,7 @@ OVERLAY_BOTTOM_RIGHT = 'W-w:H-h'
 OVERLAY_TOP_LEFT = '0:0'
 OVERLAY_TOP_RIGHT = 'W-w:0'
 
-DEFAULT_FFMPEG_PARAMS = '-strict experimental'
+DEFAULT_FFMPEG_PARAMS = '-strict experimental -ar 22500'
 DEFAULT_FRAMERATE = 5
 DEFAULT_DOWNLOAD_SIZE_CONSTRAINT = 0 # in bytes, 0 is no constraint
 
@@ -672,8 +672,8 @@ def main(argv):
     return 0
 
 if __name__ == '__main__':
-    #overlay_video_worker('20051210-w50s.flv', 
-    #                     [(5, 10, 'http://img.lenta.ru/articles/2011/10/28/zdrav/picture.jpg', OVERLAY_TOP_RIGHT, None),
+    #overlay_video_worker('20051210-w50s.flv',
+    #                     [(5, 10, 'http://img.lenta.ru/articles/2011/10/28/zdrav/picture.jpg', OVERLAY_TOP_RIGHT, 'blind_willie.mp3'),
     #                     (13, 17, 'color__1318102333_flourides_1318104950_pepper.gif', OVERLAY_BOTTOM_LEFT, None)],
     #                     'worker_overlay_20051210-w50s.flv')
     sys.exit(main(sys.argv))
